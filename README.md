@@ -44,7 +44,7 @@ Requires Node ≥ 20.
 git clone https://github.com/itsChanelML/impactOS.git && cd impactOS
 npm install && npm test && npm run build
 
-# 1. Ingest a "Funding Forward"-style email (see tests/fixtures for the expected shape)
+# 1. Ingest a "Funding Forward"-style email (see `tests/fixtures/funding-forward-real-shape.txt` for the expected shape)
 npx impactos ingest tests/fixtures/funding-forward-1.txt \
   --subject "Funding Forward: 10/19 - 10/23" --id msg-1 --received 2026-10-19T12:00:00Z
 
@@ -85,7 +85,7 @@ Copy `examples/profile.json` and set your geographies, mission/population/progra
 
 ## Limitations (please read)
 
-- The email parser targets a documented plain-text shape; real newsletters vary. Contributions of anonymized fixtures and parser improvements are the most valuable thing you can send.
+- The email parser is validated against the real Funding Forward plain-text shape (bullet list `- [Geo] Funder: Program (link) : narrative`, plus an `UPCOMING DEADLINES` list). Newsletter links are click-tracking redirects, so they are kept for humans but never used as a canonical URL; duplicates are matched on funder + title. Other newsletters vary. Contributions of anonymized fixtures and parser improvements are the most valuable thing you can send.
 - The v0.1 evaluator is rules/keyword based. It is a transparent baseline, not a substitute for judgment. LLM-assisted evaluators plug in behind the same `GrantEvaluation` shape.
 - Evaluation scores are decision support. They do not certify accuracy and are not predictions of award.
 

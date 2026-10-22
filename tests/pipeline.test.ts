@@ -149,7 +149,7 @@ describe("real newsletter shape (bullets + UPCOMING DEADLINES + tracking links)"
     const s = new Store();
     ingestEmail(s, real("r1", "2026-10-17T10:57:12Z"), now);
     const next = fx("funding-forward-real-shape.txt").replaceAll("/Ctc/", "/Ctc/NEW-");
-    const r = ingestEmail(s, real("r2", "2026-10-24T10:57:12Z", next), now);
+    const r = ingestEmail(s, real("r2", "2026-10-18T10:57:12Z", next), now);
     expect(r.created).toHaveLength(0);
     expect(s.grants()).toHaveLength(4);
   });
