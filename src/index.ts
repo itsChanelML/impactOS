@@ -7,4 +7,6 @@ export * from "./qualify.js";
 export * from "./state.js";
 export * from "./store.js";
 export * from "./pipeline.js";
-export { toSheetRows, SHEET_COLUMNS } from "./sheet.js";
+export * from "./sheet.js";
+export * from "./sheets-sync.js";
+export { GoogleSheetsClient, colLetter } from "./google-sheets.js";

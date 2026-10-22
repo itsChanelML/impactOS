@@ -2,7 +2,7 @@
 
 **Open-source, AI-native philanthropy operations.** ImpactOS turns the weekly flood of funding newsletters into a structured, deduplicated, evidence-backed grant pipeline — and keeps a human in charge of every consequential decision.
 
-> Status: **v0.1 (alpha)**. The deterministic core (parse → normalize → dedupe → qualify → human decision → audit) works and is tested. Gmail/Sheets/Drive adapters, LLM-assisted steps, and the MCP/plugin layer are on the [roadmap](ROADMAP.md).
+> Status: **v0.1 (alpha)**. The deterministic core (parse → normalize → dedupe → qualify → human decision → audit) works and is tested. Gmail/Drive adapters, LLM-assisted steps, and the MCP/plugin layer are on the [roadmap](ROADMAP.md).
 
 ## Why
 
@@ -34,7 +34,7 @@ Funding email ─▶ parse blocks ─▶ normalize (dates, $, geo, type, URL) �
 - **Idempotent:** re-ingesting an email is a no-op; a repeated opportunity with a new deadline/amount becomes a new *version* with a field-level change log.
 - **Conservative:** `AUTO_ARCHIVE` requires a deterministic rule hit at ≥0.95 confidence. Unknown eligibility → `REQUEST_RESEARCH`, never archive.
 - **Explainable:** no single opaque score. Each evaluation exposes component dimensions, rationale, missing information, and confidence (which is *not* a probability of winning).
-- **Familiar:** a Google-Sheet-shaped projection (`export-sheet`) so teams keep their existing workflow.
+- **Familiar:** two-way **Google Sheets sync** (`impactos sheet sync`): the pipeline appears in a Sheet your team already knows, and decisions typed there go through the same human-decision rules. See [docs/google-sheets.md](docs/google-sheets.md).
 
 ## Quick start
 
@@ -55,7 +55,10 @@ npx impactos list
 # 3. Record a human decision
 npx impactos decide grant_00001 PURSUE --actor sam --rationale "Fits fall programming"
 
-# 4. Export a Sheet-ready TSV, or read the audit trail
+# 4. Sync with a shared Google Sheet (setup: docs/google-sheets.md)
+npx impactos sheet sync --sheet-id <id>
+
+# 5. Or export a Sheet-ready TSV, or read the audit trail
 npx impactos export-sheet > pipeline.tsv
 npx impactos audit
 ```
@@ -78,6 +81,7 @@ Copy `examples/profile.json` and set your geographies, mission/population/progra
 
 ## Documentation
 
+- [Google Sheets sync](docs/google-sheets.md) — setup and how the two-way sync behaves
 - [Architecture](docs/architecture.md) — components, data model, extension points
 - [Decision policy](docs/decision-policy.md) — what AI may and may not do; evidence taxonomy
 - [Roadmap](ROADMAP.md) — Gmail/Sheets adapters, LLM extraction, MCP server, funder mode

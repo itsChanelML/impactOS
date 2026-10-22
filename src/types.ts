@@ -138,6 +138,7 @@ export interface GrantOpportunity {
   deadline_type: DeadlineType;
   eligibility_summary?: string;
   source_conflicts: string[];
+  owner?: string;
   status: GrantStatus;
   evaluation_id?: string;
   human_decision_id?: string;

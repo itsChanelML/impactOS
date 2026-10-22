@@ -11,11 +11,13 @@ export interface StoreState {
   processed: Record<string, true>; // `${messageId}@${parserVersion}`
   quarantine: QuarantinedBlock[];
   audit: AuditEvent[];
+  /** Last human-column values synced with the Sheet, per grant; lets sync tell a human edit from a stale cell. */
+  sheet_sync: Record<string, { owner?: string; decision?: string }>;
   seq: number;
 }
 
 const empty = (): StoreState => ({
-  grants: {}, evaluations: {}, decisions: {}, processed: {}, quarantine: [], audit: [], seq: 0,
+  grants: {}, evaluations: {}, decisions: {}, processed: {}, quarantine: [], audit: [], sheet_sync: {}, seq: 0,
 });
 
 /** Canonical record store. In-memory by default; pass a path to persist as JSON. Swap for Firestore/Postgres adapters. */
@@ -34,6 +36,10 @@ export class Store {
   }
   grants(): GrantOpportunity[] {
     return Object.values(this.state.grants);
+  }
+  latestDecision(grantId: string): HumanDecision | undefined {
+    const id = this.state.grants[grantId]?.human_decision_id;
+    return id ? this.state.decisions[id] : undefined;
   }
   latestEvaluation(grantId: string): GrantEvaluation | undefined {
     const id = this.state.grants[grantId]?.evaluation_id;

@@ -6,6 +6,8 @@ import { evaluateAll, ingestEmail, recordDecision } from "./pipeline.js";
 import { OrgProfileSchema } from "./profile.js";
 import { Store } from "./store.js";
 import { toSheetRows, SHEET_COLUMNS } from "./sheet.js";
+import { GoogleSheetsClient } from "./google-sheets.js";
+import { syncSheet } from "./sheets-sync.js";
 import type { DecisionKind } from "./types.js";
 
 const USAGE = `impactos <command> [options]
@@ -15,12 +17,14 @@ const USAGE = `impactos <command> [options]
   list [--state AUTO_ARCHIVE|REVIEW_STRONG_FIT|...]
   show <grant-id>
   decide <grant-id> <PURSUE|PASS|RESEARCH_MORE|ESCALATE> --actor you [--rationale ...] [--override-reason ...]
+  sheet setup --sheet-id <id> [--tab Pipeline]   (headers, dropdown, protection; run once)
+  sheet sync  --sheet-id <id> [--tab Pipeline]   (two-way sync with a Google Sheet)
   export-sheet            (TSV to stdout)
   audit                   (audit log as JSON)
 
 Global: --store <path>  (default .impactos/state.json)`;
 
-function main(argv: string[]) {
+async function main(argv: string[]) {
   const { values, positionals } = parseArgs({
     args: argv,
     allowPositionals: true,
@@ -28,6 +32,7 @@ function main(argv: string[]) {
       store: { type: "string", default: ".impactos/state.json" },
       subject: { type: "string" }, id: { type: "string" }, received: { type: "string" },
       profile: { type: "string" }, state: { type: "string" },
+      "sheet-id": { type: "string" }, tab: { type: "string", default: "Pipeline" },
       actor: { type: "string" }, rationale: { type: "string" }, "override-reason": { type: "string" },
       help: { type: "boolean", short: "h" },
     },
@@ -78,6 +83,22 @@ function main(argv: string[]) {
       });
       return console.log(JSON.stringify(d, null, 2));
     }
+    case "sheet": {
+      const sheetId = values["sheet-id"] ?? process.env.IMPACTOS_SHEET_ID;
+      if (!sheetId) throw new Error("--sheet-id (or IMPACTOS_SHEET_ID) is required");
+      const client = new GoogleSheetsClient({ spreadsheetId: sheetId });
+      const tab = values.tab!;
+      if (rest[0] === "setup") {
+        await client.setup(tab);
+        return console.log(`Prepared tab "${tab}".`);
+      }
+      if (rest[0] === "sync") {
+        const r = await syncSheet(store, client, tab);
+        console.log(JSON.stringify(r, null, 2));
+        return;
+      }
+      throw new Error("usage: sheet <setup|sync> --sheet-id <id>");
+    }
     case "export-sheet":
       console.log(SHEET_COLUMNS.join("\t"));
       for (const row of toSheetRows(store)) console.log(row.map((c) => c.replace(/[\t\n]/g, " ")).join("\t"));
@@ -89,9 +110,7 @@ function main(argv: string[]) {
   }
 }
 
-try {
-  main(process.argv.slice(2));
-} catch (e) {
+main(process.argv.slice(2)).catch((e) => {
   console.error(e instanceof Error ? e.message : e);
   process.exit(1);
-}
+});

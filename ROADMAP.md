@@ -5,7 +5,7 @@ Tracked as GitHub issues (label `epic`). Order is a suggestion, not a promise.
 - **E1 Source ingestion** — Gmail API adapter (label watch/poll, message fetch, retry/DLQ).
 - **E2 Parser hardening** — more real-world newsletter fixtures, HTML parsing, parser versioning.
 - **E3 Normalization** — LLM-assisted extraction for ambiguous fields; official-page verification with conflict preservation.
-- **E5 Sheet projection** — Google Sheets adapter with protected system columns and saved views.
+- **E5 Sheet projection** — ✅ two-way Google Sheets sync with warning-protected system columns and a decision dropdown. Remaining: saved filter views, scheduled sync, locking.
 - **E6 Org profile & evidence library** — Drive evidence index, approval status, versions.
 - **E7 Qualification** — pluggable LLM evaluator, richer capacity model, review-brief generator.
 - **E9 Notifications** — Slack/email digests, deadline reminders, claim/completion celebrations.
