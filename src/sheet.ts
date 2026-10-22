@@ -14,7 +14,7 @@ export function toSheetRows(store: Store): string[][] {
     const d = g.human_decision_id ? store.state.decisions[g.human_decision_id] : undefined;
     return [
       g.id, g.title, g.geographies.join(", "), g.type, g.description, g.amount_raw ?? "", g.deadline_date ?? g.deadline_raw ?? g.deadline_type,
-      g.source_url ?? "", g.created_at.slice(0, 10), g.status, ev?.workflow_state ?? "", ev?.hard_eligibility ?? "",
+      g.source_url ?? g.source_link_url ?? "", g.created_at.slice(0, 10), g.status, ev?.workflow_state ?? "", ev?.hard_eligibility ?? "",
       String(ev?.mission_alignment ?? ""), String(ev?.population_alignment ?? ""), String(ev?.funding_usefulness ?? ""),
       String(ev?.evidence_readiness ?? ""), String(ev?.application_effort ?? ""), String(ev?.deadline_feasibility ?? ""),
       ev?.missing_information.join("; ") ?? "", ev?.rationale.join(" ") ?? "", String(ev?.confidence ?? ""),

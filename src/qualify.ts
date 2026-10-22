@@ -23,7 +23,11 @@ function geographyCompatible(grantGeos: string[], orgGeos: string[]): boolean | 
   if (grantGeos.length === 0) return undefined;
   if (grantGeos.includes("GLOBAL")) return true;
   const org = new Set(orgGeos);
-  return grantGeos.some((g) => org.has(g) || (g.startsWith("US-") && org.has("US") && org.has(g)) || (g === "US" && [...org].some((o) => o === "US" || o.startsWith("US-"))));
+  const recognized = (g: string) => g === "GLOBAL" || g === "US" || /^US-[A-Z]{2}$/.test(g);
+  const match = grantGeos.some((g) => org.has(g) || (g.startsWith("US-") && org.has("US") && org.has(g)) || (g === "US" && [...org].some((o) => o === "US" || o.startsWith("US-"))));
+  // Place names we cannot classify (cities, regions, countries) are never grounds to disqualify.
+  if (!match && grantGeos.some((g) => !recognized(g))) return undefined;
+  return match;
 }
 
 interface EligibilityResult {

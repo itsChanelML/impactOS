@@ -123,3 +123,45 @@ describe("human decisions", () => {
     expect(s.activeApplications()).toBe(1);
   });
 });
+
+describe("real newsletter shape (bullets + UPCOMING DEADLINES + tracking links)", () => {
+  const real = (id: string, received: string, body = fx("funding-forward-real-shape.txt")): RawEmail => ({
+    id, subject: "Funding Forward: 10/12 - 10/16", received_at: received, body,
+  });
+
+  it("parses bullets, merges the deadline list, and never treats tracking links as canonical", () => {
+    const cs = parseFundingForward(real("r1", "2026-10-17T10:57:12Z"));
+    expect(cs.map((c) => c.title)).toEqual([
+      "Example Society: Example Fellowship", "Example Agency: STEM K-12", "Example Fund: Introductory Grants", "Example AI: Open Call",
+    ]);
+    const [fellow, stem, fund, open] = cs as [typeof cs[0], typeof cs[0], typeof cs[0], typeof cs[0]];
+    expect(fellow.funder_name).toBe("Example Society");
+    expect(fellow.deadline_date).toBe("2026-11-08"); // from narrative "Apply by"
+    expect(stem.deadline_type).toBe("rolling");
+    expect([stem.amount_min_usd, stem.amount_max_usd]).toEqual([25000, 750000]);
+    expect(fund.deadline_date).toBe("2026-11-01"); // merged from UPCOMING DEADLINES
+    expect(fund.source_block_text).toContain("Apply by November 1");
+    expect(open.deadline_date).toBe("2026-10-21"); // deadline-only entry still becomes a record
+    expect(cs.every((c) => c.source_opportunity_url === undefined && c.source_tracking_url?.includes("hubspotlinks"))).toBe(true);
+  });
+
+  it("does not duplicate a repeated opportunity when its tracking link changes", () => {
+    const s = new Store();
+    ingestEmail(s, real("r1", "2026-10-17T10:57:12Z"), now);
+    const next = fx("funding-forward-real-shape.txt").replaceAll("/Ctc/", "/Ctc/NEW-");
+    const r = ingestEmail(s, real("r2", "2026-10-24T10:57:12Z", next), now);
+    expect(r.created).toHaveLength(0);
+    expect(s.grants()).toHaveLength(4);
+  });
+
+  it("sends unclassifiable place names to research instead of archiving", () => {
+    const s = new Store();
+    ingestEmail(s, real("r1", "2026-10-17T10:57:12Z"), now);
+    evaluateAll(s, profile, now);
+    const fund = s.grants().find((g) => g.title.includes("Introductory"))!;
+    const ev = s.latestEvaluation(fund.id)!;
+    expect(ev.workflow_state).not.toBe("AUTO_ARCHIVE");
+    expect(ev.missing_information).toContain("Geographic eligibility not stated");
+    expect(ev.missing_information).toContain("Official opportunity URL missing");
+  });
+});

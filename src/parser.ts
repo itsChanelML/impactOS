@@ -13,16 +13,28 @@ export function isFundingForwardEmail(email: Pick<RawEmail, "subject" | "body">)
   return /^\s*funding forward:/i.test(email.subject) && email.body.split(/\r?\n/).some((l) => SECTION_START.test(l));
 }
 
-export function extractOpportunitySection(body: string): string[] {
+const DEADLINES_START = /^\s*#*\s*upcoming\s+deadlines\s*$/i;
+
+function extractSection(body: string, startRe: RegExp): string[] {
   const lines = body.split(/\r?\n/);
-  const start = lines.findIndex((l) => SECTION_START.test(l));
+  const start = lines.findIndex((l) => startRe.test(l));
   if (start < 0) return [];
   const out: string[] = [];
   for (const line of lines.slice(start + 1)) {
-    if (SECTION_END.test(line) && !SECTION_START.test(line)) break;
+    if (SECTION_END.test(line)) break;
     out.push(line);
   }
   return out;
+}
+
+export const extractOpportunitySection = (body: string) => extractSection(body, SECTION_START);
+export const extractDeadlineSection = (body: string) => extractSection(body, DEADLINES_START);
+
+// Newsletter links are HubSpot click-tracking redirects: unique per email and per recipient,
+// so they are kept for humans but are NOT usable as a canonical URL for dedupe.
+const TRACKING_HOST = /hubspotlinks\.com|hubspotemail\.net|list-manage\.com|mailchi\.mp|sendgrid\.net|click\./i;
+export function isTrackingUrl(url: string): boolean {
+  try { return TRACKING_HOST.test(new URL(url).hostname); } catch { return false; }
 }
 
 export function splitBlocks(lines: string[]): string[] {
@@ -68,11 +80,13 @@ export function parseBlock(block: string, email: RawEmail): GrantOpportunityCand
 
   const ref = new Date(email.received_at);
   const amount = parseAmount(amount_raw ?? description.match(/(?:up to\s+)?\$\s?\d[\d,.]*\s?(?:k|mm|m|million)?(?:\s*[-–to]+\s*\$\s?\d[\d,.]*\s?(?:k|mm|m|million)?)?/i)?.[0]);
-  const dl = parseDeadline(deadline_raw ?? description.match(/(?:deadline|due|closes?)[:\s]+([^.;]+)/i)?.[1], ref);
+  const dlText = deadline_raw ?? description.match(/(?:deadline|due|closes?|apply by|(?:proposal|application) by)[:\s]+([^.;]+)/i)?.[1] ?? description.match(/\b(rolling basis)\b/i)?.[1];
+  const dl = parseDeadline(dlText, ref);
 
   let confidence = 1;
   if (!title) { confidence -= 0.5; warnings.push("missing title"); }
   if (!url) { confidence -= 0.2; warnings.push("missing opportunity URL"); }
+  else if (isTrackingUrl(url)) warnings.push("tracking link only; official URL not yet resolved");
   if (!geography_raw) { confidence -= 0.1; warnings.push("missing geography tag"); }
   if (dl.type === "unknown") { confidence -= 0.1; warnings.push("deadline not found or not understood"); }
   if (amount.min === undefined && amount.max === undefined) { confidence -= 0.05; warnings.push("amount not found"); }
@@ -94,18 +108,83 @@ export function parseBlock(block: string, email: RawEmail): GrantOpportunityCand
     extraction_warnings: warnings,
     parser_version: PARSER_VERSION,
   };
-  if (url) c.source_opportunity_url = canonicalUrl(url) ?? url;
+  if (url && isTrackingUrl(url)) c.source_tracking_url = url;
+  else if (url) c.source_opportunity_url = canonicalUrl(url) ?? url;
   if (geography_raw) c.geography_raw = geography_raw;
   if (amount_raw) c.amount_raw = amount_raw;
   if (amount.min !== undefined) c.amount_min_usd = amount.min;
   if (amount.max !== undefined) c.amount_max_usd = amount.max;
-  if (deadline_raw) c.deadline_raw = deadline_raw;
+  if (dlText) c.deadline_raw = dlText.trim();
   if (dl.date) c.deadline_date = dl.date;
   if (eligibility_summary) c.eligibility_summary = eligibility_summary;
   return c;
 }
 
+const BULLET = /^\s*-\s*\[([^\]]{2,60})\]\s+(.+)$/;
+const DEADLINE_ITEM = /^\s*(?:-\s*)?Apply by\s+(.+?)\s+-\s+\[([^\]]{2,60})\]\s+(.+)$/i;
+
+const keyOf = (funder: string | undefined, title: string) => `${funder ?? ""}|${title}`.toLowerCase().replace(/[^a-z0-9|]+/g, " ").trim();
+
+/** "Funder: Program (link) : narrative..." -> parts. Narrative is whatever follows the link. */
+function splitFunder(rest: string): { url?: string; funder?: string; title: string; narrative: string } {
+  const m = rest.match(URL_RE);
+  const url = m?.[0]?.replace(/[.,;]+$/, "");
+  const before = (m ? rest.slice(0, m.index) : rest).replace(/[\s(<]+$/, "").trim();
+  const narrative = m ? rest.slice((m.index ?? 0) + m[0].length).replace(/^[\s)>\]:–-]+/, "").trim() : "";
+  const idx = before.indexOf(": ");
+  return { ...(url ? { url } : {}), ...(idx > 0 && idx < 80 ? { funder: before.slice(0, idx).trim() } : {}), title: before, narrative };
+}
+
+/** Real Funding Forward shape: "- [Geo] Funder: Program (link)" plus a separate "UPCOMING DEADLINES" list. */
+function parseBulletFormat(email: RawEmail): GrantOpportunityCandidate[] {
+  const funding = extractOpportunitySection(email.body);
+  const deadlines = extractDeadlineSection(email.body);
+  const byKey = new Map<string, GrantOpportunityCandidate>();
+  const out: GrantOpportunityCandidate[] = [];
+
+  const build = (line: string, geo: string, rest: string, deadlineRaw?: string) => {
+    const { url, funder, title, narrative } = splitFunder(rest);
+    const synthetic = [`[${geo}] ${title}${url ? ` (${url})` : ""}`, narrative, deadlineRaw ? `Deadline: ${deadlineRaw}` : ""].filter(Boolean).join("\n");
+    const c = parseBlock(synthetic, email);
+    c.source_block_text = line.trim();
+    if (funder) c.funder_name = funder;
+    if (url && isTrackingUrl(url)) c.source_tracking_url = url;
+    return c;
+  };
+
+  for (const line of funding) {
+    const m = line.match(BULLET);
+    if (!m) continue;
+    const c = build(line, m[1]!, m[2]!);
+    byKey.set(keyOf(c.funder_name, c.title), c);
+    out.push(c);
+  }
+  for (const line of deadlines) {
+    const m = line.match(DEADLINE_ITEM);
+    if (!m) continue;
+    const { funder, title } = splitFunder(m[3]!);
+    const hit = byKey.get(keyOf(funder, title));
+    if (hit) {
+      // merge the deadline into the matching funding-list entry, keeping provenance of both lines
+      const dl = parseDeadline(m[1]!, new Date(email.received_at));
+      hit.deadline_raw = m[1]!;
+      hit.deadline_type = dl.type;
+      if (dl.date) hit.deadline_date = dl.date;
+      hit.source_block_text += `\n${line.trim()}`;
+      hit.extraction_warnings = hit.extraction_warnings.filter((w) => !/deadline/.test(w));
+      hit.extraction_confidence = Math.min(1, Math.round((hit.extraction_confidence + 0.1) * 100) / 100);
+    } else {
+      const c = build(line, m[2]!, m[3]!, m[1]!);
+      byKey.set(keyOf(c.funder_name, c.title), c);
+      out.push(c);
+    }
+  }
+  return out;
+}
+
 export function parseFundingForward(email: RawEmail): GrantOpportunityCandidate[] {
   if (!isFundingForwardEmail(email)) return [];
-  return splitBlocks(extractOpportunitySection(email.body)).map((b) => parseBlock(b, email));
+  const section = extractOpportunitySection(email.body);
+  if (section.some((l) => BULLET.test(l))) return parseBulletFormat(email);
+  return splitBlocks(section).map((b) => parseBlock(b, email));
 }

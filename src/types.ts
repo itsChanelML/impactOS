@@ -14,6 +14,8 @@ export interface GrantOpportunityCandidate {
   source_provider: "Fast Forward";
   source_block_text: string;
   source_opportunity_url?: string;
+  /** Click-tracking redirect from the newsletter; for humans only, never used for dedupe. */
+  source_tracking_url?: string;
 
   title: string;
   funder_name?: string;
@@ -122,6 +124,7 @@ export interface GrantOpportunity {
   source_provider: string;
   source_email_ids: string[];
   source_url?: string;
+  source_link_url?: string;
   title: string;
   funder_name?: string;
   type: OpportunityType;

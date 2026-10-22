@@ -39,6 +39,7 @@ function fromCandidate(c: GrantOpportunityCandidate, id: string, now: string): G
     updated_at: now,
   };
   if (c.source_opportunity_url) g.source_url = c.source_opportunity_url;
+  if (c.source_tracking_url) g.source_link_url = c.source_tracking_url;
   if (c.funder_name) g.funder_name = c.funder_name;
   if (c.amount_min_usd !== undefined) g.amount_min_usd = c.amount_min_usd;
   if (c.amount_max_usd !== undefined) g.amount_max_usd = c.amount_max_usd;
