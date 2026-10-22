@@ -1,0 +1,13 @@
+{
+  "version": "example-1",
+  "name": "Example Youth Mentorship Nonprofit",
+  "org_type": "501c3",
+  "geographies": ["US", "US-NY"],
+  "mission_keywords": ["mentorship", "workforce development", "ai literacy", "accelerator"],
+  "population_keywords": ["youth", "students", "young people"],
+  "program_keywords": ["technical education", "ai"],
+  "evidence_keywords": ["mentorship", "youth"],
+  "min_amount_usd": 5000,
+  "hard_disqualifiers": [],
+  "sensitive_keywords": ["government contract"]
+}
