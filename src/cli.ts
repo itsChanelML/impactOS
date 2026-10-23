@@ -8,6 +8,7 @@ import { Store } from "./store.js";
 import { toSheetRows, SHEET_COLUMNS } from "./sheet.js";
 import { GoogleSheetsClient } from "./google-sheets.js";
 import { syncSheet } from "./sheets-sync.js";
+import { GmailRestClient, authorizeInteractive, pullGmail } from "./gmail.js";
 import type { DecisionKind } from "./types.js";
 
 const USAGE = `impactos <command> [options]
@@ -17,6 +18,9 @@ const USAGE = `impactos <command> [options]
   list [--state AUTO_ARCHIVE|REVIEW_STRONG_FIT|...]
   show <grant-id>
   decide <grant-id> <PURSUE|PASS|RESEARCH_MORE|ESCALATE> --actor you [--rationale ...] [--override-reason ...]
+  gmail auth              (one-time: get a read-only Gmail refresh token)
+  gmail pull [--query "label:..."] [--from ffwd.org] [--max 50]
+  run --profile profile.json [--sheet-id <id>]   (gmail pull -> evaluate -> sheet sync)
   sheet setup --sheet-id <id> [--tab Pipeline]   (headers, dropdown, protection; run once)
   sheet sync  --sheet-id <id> [--tab Pipeline]   (two-way sync with a Google Sheet)
   export-sheet            (TSV to stdout)
@@ -32,6 +36,7 @@ async function main(argv: string[]) {
       store: { type: "string", default: ".impactos/state.json" },
       subject: { type: "string" }, id: { type: "string" }, received: { type: "string" },
       profile: { type: "string" }, state: { type: "string" },
+      query: { type: "string" }, from: { type: "string", multiple: true }, max: { type: "string" },
       "sheet-id": { type: "string" }, tab: { type: "string", default: "Pipeline" },
       actor: { type: "string" }, rationale: { type: "string" }, "override-reason": { type: "string" },
       help: { type: "boolean", short: "h" },
@@ -40,6 +45,11 @@ async function main(argv: string[]) {
   const [cmd, ...rest] = positionals;
   if (!cmd || values.help) return console.log(USAGE);
   const store = new Store(resolve(values.store!));
+  const pullOpts = () => ({
+    ...(values.query ? { query: values.query } : {}),
+    ...(values.from?.length ? { allowedSenders: values.from } : {}),
+    ...(values.max ? { max: Number(values.max) } : {}),
+  });
 
   switch (cmd) {
     case "ingest": {
@@ -82,6 +92,31 @@ async function main(argv: string[]) {
         ...(values["override-reason"] ? { overrideReason: values["override-reason"] } : {}),
       });
       return console.log(JSON.stringify(d, null, 2));
+    }
+    case "gmail": {
+      if (rest[0] === "auth") {
+        const id = process.env.GMAIL_CLIENT_ID, secret = process.env.GMAIL_CLIENT_SECRET;
+        if (!id || !secret) throw new Error("Set GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET (Desktop OAuth client) first. See docs/gmail.md.");
+        const token = await authorizeInteractive(id, secret);
+        return console.log(`\nAdd this to your environment (treat it like a password):\n\nGMAIL_REFRESH_TOKEN=${token}`);
+      }
+      if (rest[0] === "pull") return console.log(JSON.stringify(await pullGmail(store, new GmailRestClient(), pullOpts()), null, 2));
+      throw new Error("usage: gmail <auth|pull>");
+    }
+    case "run": {
+      if (!values.profile) throw new Error("--profile is required");
+      const profile = OrgProfileSchema.parse(JSON.parse(readFileSync(values.profile, "utf8")));
+      const pulled = await pullGmail(store, new GmailRestClient(), pullOpts());
+      const evals = evaluateAll(store, profile);
+      console.log(`Gmail: ${pulled.listed} listed, ${pulled.ingested.length} ingested, ${pulled.alreadyProcessed} already processed, ${pulled.failed.length} failed, ${pulled.rejectedSender.length} rejected sender`);
+      console.log(`Evaluated ${evals.length} new opportunities`);
+      const sheetId = values["sheet-id"] ?? process.env.IMPACTOS_SHEET_ID;
+      if (sheetId) {
+        const r = await syncSheet(store, new GoogleSheetsClient({ spreadsheetId: sheetId }), values.tab!);
+        console.log(`Sheet: ${r.appended} added, ${r.cellsWritten} cells written, ${r.decisionsApplied} decisions applied, ${r.rejected.length} rejected`);
+      }
+      if (pulled.failed.length) process.exitCode = 2;
+      return;
     }
     case "sheet": {
       const sheetId = values["sheet-id"] ?? process.env.IMPACTOS_SHEET_ID;

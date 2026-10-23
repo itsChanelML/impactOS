@@ -10,3 +10,4 @@ export * from "./pipeline.js";
 export * from "./sheet.js";
 export * from "./sheets-sync.js";
 export { GoogleSheetsClient, colLetter } from "./google-sheets.js";
+export * from "./gmail.js";

@@ -2,7 +2,7 @@
 
 **Open-source, AI-native philanthropy operations.** ImpactOS turns the weekly flood of funding newsletters into a structured, deduplicated, evidence-backed grant pipeline — and keeps a human in charge of every consequential decision.
 
-> Status: **v0.1 (alpha)**. The deterministic core (parse → normalize → dedupe → qualify → human decision → audit) works and is tested. Gmail/Drive adapters, LLM-assisted steps, and the MCP/plugin layer are on the [roadmap](ROADMAP.md).
+> Status: **v0.1 (alpha)**. The deterministic core (parse → normalize → dedupe → qualify → human decision → audit) works and is tested. Drive adapter, LLM-assisted steps, and the MCP/plugin layer are on the [roadmap](ROADMAP.md).
 
 ## Why
 
@@ -34,6 +34,7 @@ Funding email ─▶ parse blocks ─▶ normalize (dates, $, geo, type, URL) �
 - **Idempotent:** re-ingesting an email is a no-op; a repeated opportunity with a new deadline/amount becomes a new *version* with a field-level change log.
 - **Conservative:** `AUTO_ARCHIVE` requires a deterministic rule hit at ≥0.95 confidence. Unknown eligibility → `REQUEST_RESEARCH`, never archive.
 - **Explainable:** no single opaque score. Each evaluation exposes component dimensions, rationale, missing information, and confidence (which is *not* a probability of winning).
+- **Hands-free intake:** `impactos gmail pull` reads labeled newsletters with read-only Gmail access (sender allowlist, retry on failure); `impactos run` does Gmail → qualify → Sheet in one step. See [docs/gmail.md](docs/gmail.md).
 - **Familiar:** two-way **Google Sheets sync** (`impactos sheet sync`): the pipeline appears in a Sheet your team already knows, and decisions typed there go through the same human-decision rules. See [docs/google-sheets.md](docs/google-sheets.md).
 
 ## Quick start
@@ -43,6 +44,8 @@ Requires Node ≥ 20.
 ```bash
 git clone https://github.com/itsChanelML/impactOS.git && cd impactOS
 npm install && npm test && npm run build
+
+# 0. (Optional) pull straight from Gmail instead: docs/gmail.md, then `npx impactos run --profile examples/profile.json`
 
 # 1. Ingest a "Funding Forward"-style email (see `tests/fixtures/funding-forward-real-shape.txt` for the expected shape)
 npx impactos ingest tests/fixtures/funding-forward-1.txt \
@@ -81,6 +84,7 @@ Copy `examples/profile.json` and set your geographies, mission/population/progra
 
 ## Documentation
 
+- [Gmail ingestion](docs/gmail.md) — labels, read-only OAuth, scheduling
 - [Google Sheets sync](docs/google-sheets.md) — setup and how the two-way sync behaves
 - [Architecture](docs/architecture.md) — components, data model, extension points
 - [Decision policy](docs/decision-policy.md) — what AI may and may not do; evidence taxonomy
